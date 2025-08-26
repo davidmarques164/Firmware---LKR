@@ -102,4 +102,7 @@ void loop(){
     ihm.lerIhm();
   }
   */
+
+  wf.mqttLoop();  // mantém a sessão TLS viva
+
 }
