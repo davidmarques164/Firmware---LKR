@@ -17,7 +17,7 @@ bool logOn1 = 1, logOn2 = 1, logOn3 = 1, logOn4 = 1;
  */
 ModbusClp::ModbusClp()
   : //ipClp(192, 168, 15, 11), //CLP ORIGINAL
-    ipClp(192, 168, 0, 2), //CLP teste
+    ipClp(192, 168, 0, 1), //CLP teste
     ipEsp(192, 168, 0, 10), 
     // ipIhm(192, 168, 15, 12),
     

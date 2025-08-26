@@ -29,21 +29,21 @@ const char* server = "https://premax-test-default-rtdb.firebaseio.com/preMax.jso
    Broker público p/ testes (EMQX):
    host: broker.emqx.io  porta TLS: 8883  CA: broker.emqx.io-ca.crt
 */
-static const char* MQTT_HOST  = "broker.emqx.io";
-static const uint16_t MQTT_PORT = 8883; // TLS
-static const char* MQTT_USER  = nullptr; // se não usar auth, deixe null
-static const char* MQTT_PASS  = nullptr;
-static String       MQTT_TOPIC;
+static const char*   MQTT_HOST  = "broker.emqx.io";
+static const uint16_t MQTT_PORT = 1883;            // veja nota TLS abaixo
+static const char*   MQTT_USER  = "premax";
+static const char*   MQTT_PASS  = "aut0r3aliz3";
+static String        MQTT_TOPIC = "premax/lkr";
 
 static WiFiClientSecure mqttNet;   // TLS sempre
 static PubSubClient mqtt(mqttNet);
 
-/* CA do broker (COLE o PEM real aqui). Exemplo de placeholder: */
+/* CA do broker (COLE o PEM real aqui). Exemplo de placeholder: 
 static const char ROOT_CA_PEM[] PROGMEM = R"PEM(
 -----BEGIN CERTIFICATE-----
 ...COLE_AQUI_O_CERTIFICADO_DA_CA_DO_BROKER...
 -----END CERTIFICATE-----
-)PEM";
+)PEM";*/
 
 /* Conecta MQTT com LWT */
 static bool mqttConnectWithLWT(const String& clientId){
@@ -75,12 +75,12 @@ void Wifi::begin(){
         logOn = 1;
 
             /* MQTT TLS */
-        mqttNet.setCACert(ROOT_CA_PEM);   // valida broker (NTP precisa estar OK)
+       //  mqttNet.setCACert(ROOT_CA_PEM);   // valida broker (NTP precisa estar OK)
         mqtt.setServer(MQTT_HOST, MQTT_PORT);
         mqtt.setKeepAlive(30);            // default 15s; margem maior
         mqtt.setBufferSize(1024);         // JSON > 256B
 
-        MQTT_TOPIC = "premax/dev/" + macWifi + "/telemetry";
+        //MQTT_TOPIC = "premax/dev/" + macWifi + "/telemetry";
 
     // 1ª tentativa (se NTP ainda não sincronizou, pode falhar; reconecta depois)
         String cid = "premax-" + macWifi;
