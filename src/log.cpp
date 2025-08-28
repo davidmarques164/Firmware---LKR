@@ -2,60 +2,47 @@
 #include <Wifi/wifi.h>
 #include "NTP/ntp.h"
 
-#include <WiFi.h>               // <-- adicionado para MQTT
-#include <WiFiClientSecure.h>   // <-- adicionado para MQTT (TLS)
-#include <PubSubClient.h>       // <-- adicionado para MQTT
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 
-extern      ReadTime    ntp;
-extern      Wifi        wf;     // usar MAC/tópico
+#include "MQTT/mqtt_config.h"  // CONFIG ÚNICA de host/porta/credenciais/TLS
 
-#define     LOG_FILE    "/log.txt"
+extern ReadTime ntp;
+extern Wifi     wf;      // usa wf.macWifi para compor o tópico
 
-// const char* firebaseUploadURL = "https://firebasestorage.googleapis.com/v0/b/eduardo-d28ce.appspot.com/o/preMax%2Flogs.txt?uploadType=media&name=logs/log.txt";
-// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// (HTTP desativado; envio agora será via MQTT TLS)
-
-// ===== MQTT (TLS) para LOG =====
-static const char* LOG_MQTT_HOST = "broker.emqx.io"; // broker público p/ testes
-static const uint16_t LOG_MQTT_PORT = 8883;          // TLS
-// Se quiser autenticação no broker, defina aqui:
-// static const char* LOG_MQTT_USER = "usuario";
-// static const char* LOG_MQTT_PASS = "senha";
-
-// (Para produção, substitua por CA real e use setCACert; neste exemplo usaremos setInsecure para teste.)
+#define LOG_FILE "/log.txt"
 
 Log::Log(){}
+
 void Log::begin(){
-    /* Monta SPIFFS */
     if(!SPIFFS.begin(true)){
         Serial.println("[Log]      - Falha ao montar SPIFFS");
         return;
     }
     Serial.println("[Log]      - SPIFFS montado com sucesso!");
-    apagarLogs();
+    apagarLogs();                  // mesmo comportamento do código atual
     //salvarLog("INIT       - Sistema inicializado.");
     mostrarLogs();
 }
+
 void Log::limitaLinhas(int linhasLimite){
     File arquivo = SPIFFS.open(LOG_FILE, FILE_READ);
     if(!arquivo){
         Serial.println("[Log]      - Falha ao abrir o arquivo para leitura!");
         return;
     }
-
-    /* Armazena todas as linhas */ 
     std::vector<String> linhas;
     while(arquivo.available()){
         String l = arquivo.readStringUntil('\n');
-        l.trim();  //Remove espaços e quebras extras
+        l.trim();
         if(l.length() > 0) linhas.push_back(l);
     }
     arquivo.close();
 
-    /* Se tiver muitas linhas, remove do começo */ 
-    while(linhas.size() > linhasLimite) linhas.erase(linhas.begin());
+    while((int)linhas.size() > linhasLimite) linhas.erase(linhas.begin());
 
-    /* Reescreve o arquivo */ 
     arquivo = SPIFFS.open(LOG_FILE, FILE_WRITE);
     if(!arquivo){
         Serial.println("[Log]      - Falha ao abrir o arquivo para escrita!");
@@ -64,13 +51,15 @@ void Log::limitaLinhas(int linhasLimite){
     for(const auto& linha : linhas) arquivo.println(linha);
     arquivo.close();
 }
+
 void Log::salvarLog(String mensagem){
     mensagem.replace("\n", "");
     mensagem.replace("\r", "");
+
     File arquivo = SPIFFS.open(LOG_FILE, FILE_APPEND);
     if(!arquivo){
-      Serial.println("[Log]      - Falha ao abrir o arquivo de log!");
-      return;
+        Serial.println("[Log]      - Falha ao abrir o arquivo de log!");
+        return;
     }
     String linha = "[" + ntp.formattedDateTime() + "] " + mensagem;
     arquivo.println(linha);
@@ -81,16 +70,16 @@ void Log::salvarLog(String mensagem){
 void Log::mostrarLogs(){
     File arquivo = SPIFFS.open(LOG_FILE, FILE_READ);
     if(!arquivo){
-      Serial.println("[Log]      - Não foi possível abrir o log!");
-      return;
+        Serial.println("[Log]      - Não foi possível abrir o log!");
+        return;
     }
     Serial.println("[Log]      - Conteúdo do log:");
     while(arquivo.available()){
-      String linha = arquivo.readStringUntil('\n');
-      Serial.println("             " + linha);
+        String linha = arquivo.readStringUntil('\n');
+        Serial.println("             " + linha);
     }
     arquivo.close();
-  }
+}
 
 void Log::apagarLogs(){
     SPIFFS.remove(LOG_FILE);
@@ -98,72 +87,61 @@ void Log::apagarLogs(){
 }
 
 void Log::enviarLog(){
+    if(WiFi.status() != WL_CONNECTED){
+        Serial.println("[Log]      - Sem Wi-Fi; não enviando.");
+        return;
+    }
+
     limitaLinhas(10);
-    if(!SPIFFS.exists("/log.txt")){
-      Serial.println("[Log]      - O arquivo log.txt não existe na memória!");
-      return;
+    if(!SPIFFS.exists(LOG_FILE)){
+        Serial.println("[Log]      - O arquivo log.txt não existe na memória!");
+        return;
     }
-    File logFile = SPIFFS.open("/log.txt", FILE_READ);
+
+    File logFile = SPIFFS.open(LOG_FILE, FILE_READ);
     if(!logFile){
-      Serial.println("[Log]      - Falha ao abrir log.txt");
-      return;
+        Serial.println("[Log]      - Falha ao abrir log.txt");
+        return;
     }
-
-    // =========================
-    // ENVIO HTTP (DESATIVADO)
-    // =========================
-    /*
-    HTTPClient http;
-    http.begin(firebaseUploadURL);
-    http.addHeader("Content-Type", "text/plain");
-    int tamanho = logFile.size();
-    String conteudo = logFile.readString();  
-    int httpResponseCode = http.POST(conteudo);
-    if(httpResponseCode > 0){
-      Serial.println("[Log]      - Enviado!");
-    } 
-    else{
-      Serial.printf("[Log]      - Erro no envio: %s\n", http.errorToString(httpResponseCode).c_str());
-    }
-    http.end();
-    logFile.close();
-    return;
-    */
-
-    // =========================
-    // ENVIO MQTT (ATIVO)
-    // =========================
-
     String conteudo = logFile.readString();
     logFile.close();
 
-    // Tópico usa o MAC do dispositivo
-    String topic = "premax/dev/" + wf.macWifi + "/logs";
+    // Tópico por dispositivo
+    String topic = String("premax/dev/") + wf.macWifi + "/logs";
 
-    // Cliente TLS ad-hoc para o envio do log
-    WiFiClientSecure tls;
-    // Em produção, use setCACert(CA_PEM) para validar o broker.
-    tls.setInsecure(); // TESTE APENAS
+    // Cliente de rede conforme configuração
+#if MQTT_USE_TLS
+    WiFiClientSecure net;
+    net.setCACert(MQTT_ROOT_CA_PEM);      // valida broker (produção)
+#else
+    WiFiClient net;                       // TCP sem TLS
+#endif
 
-    PubSubClient mqtt(tls);
-    mqtt.setServer(LOG_MQTT_HOST, LOG_MQTT_PORT);
-    mqtt.setBufferSize(2048);   // log pode ser maior que 256B
-    mqtt.setKeepAlive(15);      // suficiente para publish único
+    PubSubClient mqtt(net);
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    mqtt.setBufferSize(2048);             // log pode ser >256B
+    mqtt.setKeepAlive(15);
 
-    // Conecta no broker (sem auth)
-    String cid = "premax-log-" + wf.macWifi;
-    bool ok = mqtt.connect(cid.c_str());
-    if(!ok){
-      Serial.println("[Log]      - MQTT TLS: falha ao conectar broker");
-      return;
-    }
-
-    // Publica o log
-    if(mqtt.publish(topic.c_str(), conteudo.c_str(), false)){
-      Serial.println("[Log]      - Log enviado via MQTT TLS");
+    // Conexão com LWT (mesmo padrão do Wi-Fi)
+    String cid = String("premax-log-") + wf.macWifi;
+    String willTopic = String("premax/status/") + cid;
+    const char* willMsg = "offline";
+    bool ok;
+    if (strlen(MQTT_USER) > 0) {
+        ok = mqtt.connect(cid.c_str(), MQTT_USER, MQTT_PASS,
+                          willTopic.c_str(), 1, true, willMsg);
     } else {
-      Serial.println("[Log]      - Falha ao publicar log via MQTT TLS (buffer/conexão?)");
+        ok = mqtt.connect(cid.c_str(), willTopic.c_str(), 1, true, willMsg);
+    }
+    if(!ok){
+        Serial.println("[Log]      - MQTT: falha ao conectar broker");
+        return;
     }
 
+    if(mqtt.publish(topic.c_str(), (const uint8_t*)conteudo.c_str(), conteudo.length(), false)){
+        Serial.println("[Log]      - Log enviado via MQTT");
+    } else {
+        Serial.println("[Log]      - Falha ao publicar log via MQTT (buffer/conexão?)");
+    }
     mqtt.disconnect();
 }
