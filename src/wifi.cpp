@@ -72,7 +72,7 @@ void Wifi::enviaJson(unsigned long id){
     serializeJson(jsonDoc, payload);
 
     // Publica no tópico fixo que você está usando
-    const char* TOPICO_FIXO = "premax/lkr";
+    const char* TOPICO_FIXO = "/lkr";
     if (MqttClient::instance().publish(String(TOPICO_FIXO), payload)) {
         Serial.println("[Wifi]     - MQTT publish OK");
         for (int i = 0; i < 3; i++){ digitalWrite(LED_SEND,1); delay(50); digitalWrite(LED_SEND,0); delay(400); }
