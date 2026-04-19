@@ -1,4 +1,4 @@
-# preMax – Firmware (Resumo Técnico)
+#  Firmware (Resumo Técnico)
 
 ## Arquitetura (fluxo)
 
@@ -8,7 +8,7 @@
 4. **Loop** periódico:
 
    * Lê CLP a cada **10s**.
-   * Envia JSON a cada **20s** para Firebase (HTTP **PATCH** em `.../preMax.json`).
+   * Envia JSON a cada **20s** para Firebase (HTTP **PATCH** em `.../.json`).
    * Verifica **OTA** a cada **5000s** (compara `version.txt`; baixa `firmware.bin` se diferente).
    * Verifica Wi-Fi a cada **10s**.
    * Envia **logs** a cada **10s** (SPIFFS → Firebase).
@@ -47,7 +47,7 @@ Servidor base `pool.ntp.org`, *offset* `-10800` (UTC-3). `formattedDateTime()` r
 
 ## Telemetria (HTTP → Firebase)
 
-* Endpoint: `https://eduardo-d28ce.firebaseio.com/preMax.json` (método **PATCH**).
+* Endpoint: `https://eduardo-d28ce.firebaseio.com/.json` (método **PATCH**).
 * Payload inclui: `id`, `mac`, `date_time`, variáveis do CLP e **entradas digitais S\_01..S\_07**.
 * Feedback de envio: piscas em `LED_SEND`.
 
